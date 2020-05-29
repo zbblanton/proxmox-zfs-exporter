@@ -7,7 +7,7 @@ Metrics exporter for Prometheus. Exposes metrics to help monitor the health of Z
 The code was written quickly and needs to be cleaned up but it's functional. Lots of work could be done here and I always welcome contributions.
 
 ## Exported Metrics
-| name  | Description |
+| Name  | Description |
 | ------------- | ------------- |
 | zfs_zpool_error | Is there a zpool error |
 | zfs_zpool_online | Is the zpool online |
