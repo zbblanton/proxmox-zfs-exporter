@@ -10,7 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func readConfigFile() ProxmoxAPI {
+func readConfigFile() *ProxmoxAPI {
 	config := ProxmoxAPI{}
 	f, err := os.Open("/etc/proxmox-zfs-exporter/config.json")
 	if err != nil {
@@ -24,12 +24,12 @@ func readConfigFile() ProxmoxAPI {
 		panic("Cannot decode config file.")
 	}
 
-	return config
+	return &config
 }
 
 func main() {
 	proxmoxAPI := readConfigFile()
-	collector := newProxmoxZpoolCollector("test", &proxmoxAPI)
+	collector := newProxmoxZpoolCollector("test", proxmoxAPI)
 	prometheus.MustRegister(collector)
 
 	go proxmoxAPI.refreshTicket()

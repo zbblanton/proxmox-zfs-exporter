@@ -26,6 +26,13 @@ type ProxmoxAPITicketResp struct {
 	} `json:"data"`
 }
 
+type ProxmoxAPINodesListResp struct {
+	Data []struct {
+		Node   string `json:"node"`
+		Status string `json:"status"`
+	} `json:"data"`
+}
+
 type ProxmoxAPIZpoolListResp struct {
 	Data []struct {
 		Size   float64 `json:"size"`
@@ -109,7 +116,7 @@ func (api *ProxmoxAPI) GetAPITicket() (string, error) {
 	return respBody.Data.Ticket, nil
 }
 
-func (api *ProxmoxAPI) GetZpoolList() (ProxmoxAPIZpoolListResp, error) {
+func (api *ProxmoxAPI) GetNodes() (ProxmoxAPINodesListResp, error) {
 	//Copy the api vars so we can free up the lock
 	api.mux.Lock()
 	host := api.Host
@@ -117,7 +124,48 @@ func (api *ProxmoxAPI) GetZpoolList() (ProxmoxAPIZpoolListResp, error) {
 	ticket := api.Ticket
 	api.mux.Unlock()
 
-	url := "https://" + host + ":" + port + "/api2/json/nodes/pve/disks/zfs"
+	url := "https://" + host + ":" + port + "/api2/json/nodes"
+	c := &tls.Config{
+		InsecureSkipVerify: true,
+	}
+	tr := &http.Transport{TLSClientConfig: c}
+	client := &http.Client{Transport: tr}
+	//client := &http.Client{}
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return ProxmoxAPINodesListResp{}, err
+	}
+	req.Header.Add("Content-type", "application/json")
+	authCookie := http.Cookie{
+		Name:  "PVEAuthCookie",
+		Value: ticket,
+	}
+	req.AddCookie(&authCookie)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return ProxmoxAPINodesListResp{}, err
+	}
+	defer resp.Body.Close() //Close the resp body when finished
+
+	respBody := ProxmoxAPINodesListResp{}
+	err = json.NewDecoder(resp.Body).Decode(&respBody)
+	if err != nil {
+		return ProxmoxAPINodesListResp{}, err
+	}
+
+	return respBody, nil
+}
+
+func (api *ProxmoxAPI) GetZpoolList(node string) (ProxmoxAPIZpoolListResp, error) {
+	//Copy the api vars so we can free up the lock
+	api.mux.Lock()
+	host := api.Host
+	port := api.Port
+	ticket := api.Ticket
+	api.mux.Unlock()
+
+	url := "https://" + host + ":" + port + "/api2/json/nodes/" + node + "/disks/zfs"
 	c := &tls.Config{
 		InsecureSkipVerify: true,
 	}
@@ -147,12 +195,10 @@ func (api *ProxmoxAPI) GetZpoolList() (ProxmoxAPIZpoolListResp, error) {
 		return ProxmoxAPIZpoolListResp{}, err
 	}
 
-	fmt.Println(respBody)
-
 	return respBody, nil
 }
 
-func (api *ProxmoxAPI) GetZpool(name string) (ProxmoxAPIZpoolResp, error) {
+func (api *ProxmoxAPI) GetZpool(node string, name string) (ProxmoxAPIZpoolResp, error) {
 	//Copy the api vars so we can free up the lock
 	api.mux.Lock()
 	host := api.Host
@@ -160,7 +206,7 @@ func (api *ProxmoxAPI) GetZpool(name string) (ProxmoxAPIZpoolResp, error) {
 	ticket := api.Ticket
 	api.mux.Unlock()
 
-	url := "https://" + host + ":" + port + "/api2/json/nodes/pve/disks/zfs/" + name
+	url := "https://" + host + ":" + port + "/api2/json/nodes/" + node + "/disks/zfs/" + name
 	c := &tls.Config{
 		InsecureSkipVerify: true,
 	}
@@ -190,13 +236,11 @@ func (api *ProxmoxAPI) GetZpool(name string) (ProxmoxAPIZpoolResp, error) {
 		return ProxmoxAPIZpoolResp{}, err
 	}
 
-	fmt.Println(respBody)
-
 	return respBody, nil
 }
 
 func (api *ProxmoxAPI) refreshTicket() {
-	ticker := time.NewTicker(5 * time.Second)
+	ticker := time.NewTicker(time.Hour)
 	for {
 		newTicket, err := api.GetAPITicket()
 		if err != nil {
